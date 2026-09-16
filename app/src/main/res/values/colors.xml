@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg_dark">#0A0A0F</color>
+    <color name="surface_dark">#121218</color>
+    <color name="border_purple">#2A1F4E</color>
+    <color name="neon_purple">#B44BFF</color>
+    <color name="neon_purple2">#8A2BE2</color>
+    <color name="text_white">#F0F0F0</color>
+    <color name="text_gray">#9A9AA8</color>
+    <color name="accent_green">#00E676</color>
+</resources>
