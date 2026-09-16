@@ -6,7 +6,6 @@ import android.content.pm.PackageManager;
 import android.graphics.drawable.Drawable;
 
 import java.io.BufferedReader;
-import java.io.DataOutputStream;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
@@ -20,18 +19,14 @@ public class Scanner {
         this.ctx = ctx;
     }
 
-    // ============ KunTools executeRootCommand - حرفياً ============
+    // ============ ROOT EXEC - su -c ============
     private String executeRootCommand(String command) {
         StringBuilder output = new StringBuilder();
         Process p = null;
-        DataOutputStream os = null;
         BufferedReader br = null;
         try {
-            p = Runtime.getRuntime().exec("su");
-            os = new DataOutputStream(p.getOutputStream());
+            p = Runtime.getRuntime().exec(new String[]{"su", "-c", command});
             br = new BufferedReader(new InputStreamReader(p.getInputStream()));
-            os.writeBytes(command + "\nexit\n");
-            os.flush();
             String line;
             while ((line = br.readLine()) != null) {
                 output.append(line).append("\n");
@@ -40,34 +35,10 @@ public class Scanner {
         } catch (Exception e) {
             return "";
         } finally {
-            try { if (os != null) os.close(); } catch (Exception ignored) {}
             try { if (br != null) br.close(); } catch (Exception ignored) {}
+            try { if (p != null) p.destroy(); } catch (Exception ignored) {}
         }
         return output.toString().trim();
-    }
-
-    // ============ KunTools extractPayloadSync - حرفياً ============
-    // يفحص تطبيق واحد ويحدد نوع المنصة والمعرف
-    public String extractPayloadSync(String pkg) {
-        String command =
-            "pkg=\"" + pkg + "\"; " +
-            "prefs=\"/data/data/$pkg/shared_prefs\"; " +
-            "af_xml=\"$prefs/appsflyer-data.xml\"; " +
-            "singular_xml=\"$prefs/pref-singular-id.xml\"; " +
-            "adjust_xml=\"$prefs/adjust_preferences.xml\"; " +
-            "if test -f \"$af_xml\"; then " +
-            "  id=$(sed -n \"s/.*name=\\\"AF_INSTALLATION\\\">\\([^<]*\\).*/\\1/p\" \"$af_xml\" | head -n 1); " +
-            "  echo \"AF|$id\"; " +
-            "elif test -f \"$singular_xml\"; then " +
-            "  id=$(sed -n \"s/.*name=\\\"singular-id\\\">\\([^<]*\\).*/\\1/p\" \"$singular_xml\" | head -n 1); " +
-            "  echo \"SG|$id\"; " +
-            "elif test -f \"$adjust_xml\"; then " +
-            "  echo \"AD|-\"; " +
-            "else " +
-            "  echo \"NO|-\"; " +
-            "fi";
-
-        return executeRootCommand(command);
     }
 
     // ============ GAID ============
@@ -75,40 +46,74 @@ public class Scanner {
         if (cachedGaid != null) return cachedGaid;
 
         String result = executeRootCommand(
-            "cat /data/data/com.google.android.gms/shared_prefs/adid_settings.xml 2>/dev/null"
+            "grep -oE \"[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}\" " +
+            "/data/data/com.google.android.gms/shared_prefs/adid_settings.xml 2>/dev/null | head -n 1"
         );
 
-        try {
-            java.util.regex.Matcher m = java.util.regex.Pattern.compile(
-                "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
-            ).matcher(result);
-            if (m.find()) {
-                cachedGaid = m.group();
-                return cachedGaid;
-            }
-        } catch (Exception ignored) {}
+        if (!result.isEmpty()) {
+            cachedGaid = result;
+            return cachedGaid;
+        }
+
+        // احتياطي
+        String alt = executeRootCommand("settings get secure advertising_id");
+        if (alt != null && !alt.isEmpty() && !alt.equals("null")) {
+            cachedGaid = alt;
+            return cachedGaid;
+        }
 
         cachedGaid = "Not Found";
         return cachedGaid;
     }
 
-    // ============ DEEP SCAN ONE APP (ON CLICK) ============
+    // ============ DEEP SCAN ONE APP ============
     public void deepScan(AppData app) {
-        String result = extractPayloadSync(app.packageName);
+        String pkg = app.packageName;
 
+        String cmd =
+            "prefs=\"/data/data/" + pkg + "/shared_prefs\"; " +
+            "[ -d \"$prefs\" ] || prefs=\"/data/user/0/" + pkg + "/shared_prefs\"; " +
+            "AF=\"$prefs/appsflyer-data.xml\"; " +
+            "SG=\"$prefs/pref-singular-id.xml\"; " +
+            "AJ=\"$prefs/adjust_preferences.xml\"; " +
+            "if [ -f \"$AF\" ]; then " +
+            "  echo \"TAG=AF\"; " +
+            "  sed -n 's/.*name=\"AF_INSTALLATION\">\\([^<]*\\).*/\\1/p' \"$AF\" | head -n 1; " +
+            "elif [ -f \"$SG\" ]; then " +
+            "  echo \"TAG=SG\"; " +
+            "  sed -n 's/.*name=\"singular-id\">\\([^<]*\\).*/\\1/p' \"$SG\" | head -n 1; " +
+            "elif [ -f \"$AJ\" ]; then " +
+            "  echo \"TAG=AD\"; " +
+            "  echo \"-\"; " +
+            "else " +
+            "  echo \"TAG=NO\"; " +
+            "  echo \"-\"; " +
+            "fi";
+
+        String result = executeRootCommand(cmd);
         app.gaid = getGaid();
 
-        if (result.startsWith("AF|")) {
+        String[] lines = result.split("\n");
+        String tag = "";
+        String value = "";
+
+        for (String line : lines) {
+            if (line.startsWith("TAG=")) {
+                tag = line.substring(4).trim();
+            } else if (!line.isEmpty()) {
+                value = line.trim();
+            }
+        }
+
+        if ("AF".equals(tag)) {
             app.tracker = "AppsFlyer";
             app.trackerColor = 0xFFFF9800;
-            app.afId = result.substring(3).trim();
-            if (app.afId.isEmpty()) app.afId = "-";
-        } else if (result.startsWith("SG|")) {
+            app.afId = value.isEmpty() ? "-" : value;
+        } else if ("SG".equals(tag)) {
             app.tracker = "Singular";
             app.trackerColor = 0xFF00E5FF;
-            app.singularId = result.substring(3).trim();
-            if (app.singularId.isEmpty()) app.singularId = "-";
-        } else if (result.startsWith("AD|")) {
+            app.singularId = value.isEmpty() ? "-" : value;
+        } else if ("AD".equals(tag)) {
             app.tracker = "Adjust";
             app.trackerColor = 0xFF00E676;
         } else {
@@ -117,7 +122,7 @@ public class Scanner {
         }
     }
 
-    // ============ QUICK SCAN ============
+    // ============ LIST APPS ============
     public List<AppData> scan() {
         List<AppData> list = new ArrayList<>();
         PackageManager pm = ctx.getPackageManager();
