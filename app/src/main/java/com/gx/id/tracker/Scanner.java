@@ -12,7 +12,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 public class Scanner {
 
@@ -76,72 +75,63 @@ public class Scanner {
         return cachedGaid;
     }
 
-    public Map<String, String> pullAppData(String pkg) {
-        Map<String, String> result = new HashMap<>();
-        result.put("type", "None");
-        result.put("value1", "");
-        result.put("value2", "");
+    // ============ DEEP SCAN ALL APPS (ONE ROOT CALL) ============
+    public void deepScanAll(List<AppData> apps) {
+        pullGaid();
 
-        String base = "/data/data/" + pkg + "/shared_prefs";
-        String alt = "/data/user/0/" + pkg + "/shared_prefs";
-
-        String[] paths = { base, alt };
-        for (String p : paths) {
-            String check = sh("ls \"" + p + "\" 2>/dev/null");
-            if (check == null || check.isEmpty()) continue;
-
-            String afFile = p + "/appsflyer-data.xml";
-            String sgFile = p + "/pref-singular-id.xml";
-            String ajFile = p + "/adjust_preferences.xml";
-
-            String afExists = sh("test -f \"" + afFile + "\" && echo YES");
-            if (afExists.contains("YES")) {
-                String afContent = sh("cat \"" + afFile + "\" 2>/dev/null");
-                String afId = extractXmlValue(afContent, "AF_INSTALLATION");
-                String androidId = extractXmlValue(afContent, "androidIdCached");
-                result.put("type", "AppsFlyer");
-                result.put("value1", afId.isEmpty() ? "-" : afId);
-                result.put("value2", androidId.isEmpty() ? "-" : androidId);
-                return result;
-            }
-
-            String sgExists = sh("test -f \"" + sgFile + "\" && echo YES");
-            if (sgExists.contains("YES")) {
-                String sgContent = sh("cat \"" + sgFile + "\" 2>/dev/null");
-                String sgId = extractXmlValue(sgContent, "singular-id");
-                result.put("type", "Singular");
-                result.put("value1", sgId.isEmpty() ? "-" : sgId);
-                return result;
-            }
-
-            String ajExists = sh("test -f \"" + ajFile + "\" && echo YES");
-            if (ajExists.contains("YES")) {
-                result.put("type", "Adjust");
-                return result;
-            }
+        StringBuilder script = new StringBuilder();
+        for (AppData a : apps) {
+            String pkg = a.packageName;
+            script.append("P=\"/data/data/").append(pkg).append("/shared_prefs\"; ");
+            script.append("A=\"/data/user/0/").append(pkg).append("/shared_prefs\"; ");
+            script.append("[ -d \"$P\" ] || P=\"$A\"; ");
+            script.append("AF=\"$P/appsflyer-data.xml\"; ");
+            script.append("SG=\"$P/pref-singular-id.xml\"; ");
+            script.append("AJ=\"$P/adjust_preferences.xml\"; ");
+            script.append("if [ -f \"$AF\" ]; then ");
+            script.append("V=$(sed -n 's/.*name=\"AF_INSTALLATION\">\\([^<]*\\).*/\\1/p' \"$AF\" | head -n1); ");
+            script.append("echo \"JT|").append(pkg).append("|AF|$V\"; ");
+            script.append("elif [ -f \"$SG\" ]; then ");
+            script.append("V=$(sed -n 's/.*name=\"singular-id\">\\([^<]*\\).*/\\1/p' \"$SG\" | head -n1); ");
+            script.append("echo \"JT|").append(pkg).append("|SG|$V\"; ");
+            script.append("elif [ -f \"$AJ\" ]; then ");
+            script.append("echo \"JT|").append(pkg).append("|AD|-\"; ");
+            script.append("else ");
+            script.append("echo \"JT|").append(pkg).append("|NO|-\"; ");
+            script.append("fi; ");
         }
 
-        return result;
-    }
+        String out = sh(script.toString());
+        Map<String, String[]> results = new HashMap<>();
 
-    private String extractXmlValue(String xml, String key) {
-        if (xml == null || xml.isEmpty()) return "";
-        try {
-            String tag = "name=\"" + key + "\"";
-            int idx = xml.indexOf(tag);
-            if (idx < 0) return "";
-            int close = xml.indexOf("</string>", idx);
-            if (close < 0) close = xml.indexOf("/>", idx);
-            if (close < 0) return "";
-            String segment = xml.substring(idx, close);
-            int start = segment.indexOf(">");
-            if (start < 0) return "";
-            String val = segment.substring(start + 1);
-            if (val.startsWith("</string>")) return "";
-            val = val.replace("</string>", "").trim();
-            return val;
-        } catch (Exception e) {
-            return "";
+        for (String line : out.split("\n")) {
+            if (!line.startsWith("JT|")) continue;
+            String[] parts = line.split("\\|");
+            if (parts.length < 4) continue;
+            results.put(parts[1], new String[]{parts[2], parts[3]});
+        }
+
+        for (AppData a : apps) {
+            String[] r = results.get(a.packageName);
+            a.gaid = cachedGaid;
+            if (r == null) {
+                a.tracker = "None";
+                a.trackerColor = 0xFF9E9E9E;
+            } else if ("AF".equals(r[0])) {
+                a.tracker = "AppsFlyer";
+                a.trackerColor = 0xFFFF9800;
+                a.afId = r[1].isEmpty() ? "-" : r[1];
+            } else if ("SG".equals(r[0])) {
+                a.tracker = "Singular";
+                a.trackerColor = 0xFF00E5FF;
+                a.singularId = r[1].isEmpty() ? "-" : r[1];
+            } else if ("AD".equals(r[0])) {
+                a.tracker = "Adjust";
+                a.trackerColor = 0xFF00E676;
+            } else {
+                a.tracker = "None";
+                a.trackerColor = 0xFF9E9E9E;
+            }
         }
     }
 
@@ -158,7 +148,6 @@ public class Scanner {
     public List<AppData> scan() {
         List<AppData> list = new ArrayList<>();
         PackageManager pm = ctx.getPackageManager();
-        String gaid = pullGaid();
 
         List<ApplicationInfo> apps = pm.getInstalledApplications(PackageManager.GET_META_DATA);
 
@@ -176,33 +165,9 @@ public class Scanner {
             catch (Exception ignored) {}
 
             AppData data = new AppData(name, pkg, version, "None", 0xFF9E9E9E, icon);
-            data.gaid = gaid;
-            data.installId = UUID.randomUUID().toString();
-            data.uuid = UUID.randomUUID().toString();
-            data.deviceId = UUID.randomUUID().toString();
-
             list.add(data);
         }
 
         return list;
-    }
-
-    public void deepScan(AppData app) {
-        Map<String, String> info = pullAppData(app.packageName);
-        String type = info.get("type");
-
-        app.tracker = type;
-        if ("AppsFlyer".equals(type)) {
-            app.trackerColor = 0xFFFF9800;
-            app.afId = info.get("value1");
-            app.installId = info.get("value2");
-        } else if ("Singular".equals(type)) {
-            app.trackerColor = 0xFF00E5FF;
-            app.singularId = info.get("value1");
-        } else if ("Adjust".equals(type)) {
-            app.trackerColor = 0xFF00E676;
-        } else {
-            app.trackerColor = 0xFF9E9E9E;
-        }
     }
 }
