@@ -33,37 +33,32 @@ public class IdDialog {
 
         btnClose.setOnClickListener(v -> dialog.dismiss());
 
-        // ============ SHOW IDs BASED ON TRACKER ============
+        // ============ GAID دايماً ============
+        addRow(ctx, container, "GAID", safe(app.gaid));
+
+        // ============ حسب المنصة ============
         if ("AppsFlyer".equals(app.tracker)) {
-            addRow(ctx, container, "GAID", safe(app.gaid));
             addRow(ctx, container, "AF_ID", safe(app.afId));
         } else if ("Singular".equals(app.tracker)) {
-            addRow(ctx, container, "GAID", safe(app.gaid));
             addRow(ctx, container, "SINGULAR_ID", safe(app.singularId));
-        } else if ("Adjust".equals(app.tracker)) {
-            addRow(ctx, container, "GAID", safe(app.gaid));
-            addRow(ctx, container, "ADJUST_ID", "-");
-        } else {
-            addRow(ctx, container, "GAID", safe(app.gaid));
         }
+        // Adjust و None: بس GAID
 
         btnCopyAll.setOnClickListener(v -> {
             StringBuilder sb = new StringBuilder();
             sb.append("App: ").append(app.name).append("\n");
             sb.append("Package: ").append(app.packageName).append("\n");
             sb.append("Tracker: ").append(app.tracker).append("\n");
-            sb.append("GAID: ").append(safe(app.gaid)).append("\n");
+            sb.append("GAID: ").append(safe(app.gaid));
 
             if ("AppsFlyer".equals(app.tracker)) {
-                sb.append("AF_ID: ").append(safe(app.afId));
+                sb.append("\nAF_ID: ").append(safe(app.afId));
             } else if ("Singular".equals(app.tracker)) {
-                sb.append("SINGULAR_ID: ").append(safe(app.singularId));
-            } else if ("Adjust".equals(app.tracker)) {
-                sb.append("ADJUST_ID: -");
+                sb.append("\nSINGULAR_ID: ").append(safe(app.singularId));
             }
 
-            copy(ctx, "GX_ID", sb.toString().trim());
-            Toast.makeText(ctx, "All IDs copied!", Toast.LENGTH_SHORT).show();
+            copy(ctx, "GX_ID", sb.toString());
+            Toast.makeText(ctx, "Copied!", Toast.LENGTH_SHORT).show();
         });
 
         dialog.show();
@@ -93,4 +88,4 @@ public class IdDialog {
         ClipboardManager cm = (ClipboardManager) ctx.getSystemService(Context.CLIPBOARD_SERVICE);
         cm.setPrimaryClip(ClipData.newPlainText(label, value));
     }
-                }
+}
