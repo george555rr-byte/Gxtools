@@ -1,13 +1,10 @@
 package com.gx.id.tracker;
 
-import android.content.Context;
-import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
-import android.widget.LinearLayout;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
@@ -44,8 +41,6 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.VH> {
     public void onBindViewHolder(@NonNull VH h, int position) {
         AppData app = data.get(position);
         h.tvName.setText(app.name);
-        h.tvPackage.setText(app.packageName);
-        h.tvVersion.setText("v" + app.version);
         h.tvTracker.setText(app.tracker);
 
         if (app.icon != null) {
@@ -70,15 +65,13 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.VH> {
 
     static class VH extends RecyclerView.ViewHolder {
         ImageView imgIcon;
-        TextView tvName, tvPackage, tvVersion, tvTracker;
+        TextView tvName, tvTracker;
 
         VH(View v) {
             super(v);
             imgIcon = v.findViewById(R.id.imgIcon);
             tvName = v.findViewById(R.id.tvName);
-            tvPackage = v.findViewById(R.id.tvPackage);
-            tvVersion = v.findViewById(R.id.tvVersion);
             tvTracker = v.findViewById(R.id.tvTracker);
         }
     }
-          }
+}
