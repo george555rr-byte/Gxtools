@@ -99,14 +99,40 @@ public class MainActivity extends AppCompatActivity {
 
     private void loadAppsAndScanAll() {
         ProgressDialog pd = new ProgressDialog(this);
-        pd.setMessage("Scanning all apps...");
+        pd.setMessage("Scanning apps...");
         pd.setCancelable(false);
         pd.show();
 
         new Thread(() -> {
+            // 1. احصل على قائمة كل التطبيقات
             final List<AppData> apps = scanner.scan();
-            scanner.deepScanAll(apps);
+            final int total = apps.size();
 
+            // 2. افحص كل تطبيق بشكل منفصل (KunTools style)
+            for (int i = 0; i < total; i++) {
+                final int idx = i + 1;
+                final AppData app = apps.get(i);
+
+                // تحديث رسالة الـ ProgressDialog
+                new Handler(Looper.getMainLooper()).post(() ->
+                    pd.setMessage("Scanning " + idx + "/" + total + "...")
+                );
+
+                // فحص التطبيق
+                scanner.deepScan(app);
+
+                // تحديث الواجهة كل 3 تطبيقات
+                if (i % 3 == 0 || i == total - 1) {
+                    new Handler(Looper.getMainLooper()).post(() -> {
+                        allApps.clear();
+                        allApps.addAll(apps);
+                        applyFilters();
+                        refreshCounts();
+                    });
+                }
+            }
+
+            // 3. إنهاء
             new Handler(Looper.getMainLooper()).post(() -> {
                 allApps.clear();
                 allApps.addAll(apps);
@@ -115,7 +141,7 @@ public class MainActivity extends AppCompatActivity {
                 refreshCounts();
                 pd.dismiss();
                 Toast.makeText(this,
-                    "Scan complete: " + apps.size() + " apps",
+                    "Scan complete: " + total + " apps",
                     Toast.LENGTH_SHORT).show();
             });
         }).start();
