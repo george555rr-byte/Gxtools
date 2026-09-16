@@ -4,7 +4,7 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="@color/bg_dark"
-    android:padding="16dp">
+    android:padding="14dp">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -36,9 +36,10 @@
         </LinearLayout>
 
         <TextView
+            android:id="@+id/tvStatus"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="ARMED"
+            android:text="..."
             android:textColor="@color/accent_green"
             android:textSize="11sp"
             android:textStyle="bold"
@@ -50,10 +51,10 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="18dp"
+        android:layout_marginTop="12dp"
         android:orientation="horizontal"
         android:background="@drawable/card_bg"
-        android:padding="18dp">
+        android:padding="14dp">
 
         <LinearLayout
             android:layout_width="0dp"
@@ -64,7 +65,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="APPS SCANNED"
+                android:text="APPS"
                 android:textColor="@color/neon_purple"
                 android:textSize="10sp"
                 android:textStyle="bold" />
@@ -75,7 +76,7 @@
                 android:layout_height="wrap_content"
                 android:text="0"
                 android:textColor="@color/text_white"
-                android:textSize="26sp"
+                android:textSize="22sp"
                 android:textStyle="bold" />
         </LinearLayout>
 
@@ -88,7 +89,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="TRACKERS FOUND"
+                android:text="TRACKERS"
                 android:textColor="@color/neon_purple"
                 android:textSize="10sp"
                 android:textStyle="bold" />
@@ -99,20 +100,86 @@
                 android:layout_height="wrap_content"
                 android:text="0"
                 android:textColor="@color/accent_green"
-                android:textSize="26sp"
+                android:textSize="22sp"
                 android:textStyle="bold" />
         </LinearLayout>
     </LinearLayout>
 
-    <TextView
-        android:layout_width="wrap_content"
+    <EditText
+        android:id="@+id/etSearch"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="14dp"
-        android:text="TARGETS"
-        android:textColor="@color/neon_purple"
-        android:textSize="11sp"
-        android:textStyle="bold"
-        android:letterSpacing="0.1" />
+        android:layout_marginTop="12dp"
+        android:hint="Search games..."
+        android:textColorHint="@color/text_gray"
+        android:textColor="@color/text_white"
+        android:background="@drawable/card_bg"
+        android:padding="14dp"
+        android:textSize="13sp"
+        android:inputType="text"
+        android:maxLines="1" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/btnFilterAll"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="ALL"
+            android:textColor="@color/text_white"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:padding="8dp"
+            android:layout_marginEnd="4dp"
+            android:background="@drawable/filter_bg" />
+
+        <TextView
+            android:id="@+id/btnFilterAf"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="AF"
+            android:textColor="@color/text_white"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:padding="8dp"
+            android:layout_marginEnd="4dp"
+            android:background="@drawable/filter_bg" />
+
+        <TextView
+            android:id="@+id/btnFilterSin"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="SIN"
+            android:textColor="@color/text_white"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:padding="8dp"
+            android:layout_marginEnd="4dp"
+            android:background="@drawable/filter_bg" />
+
+        <TextView
+            android:id="@+id/btnFilterAdj"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="ADJ"
+            android:textColor="@color/text_white"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:padding="8dp"
+            android:background="@drawable/filter_bg" />
+    </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerApps"
