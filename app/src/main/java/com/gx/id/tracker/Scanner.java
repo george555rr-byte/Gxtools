@@ -9,9 +9,7 @@ import java.io.BufferedReader;
 import java.io.DataOutputStream;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 public class Scanner {
 
@@ -22,8 +20,9 @@ public class Scanner {
         this.ctx = ctx;
     }
 
-    private String sh(String cmd) {
-        StringBuilder out = new StringBuilder();
+    // ============ KunTools executeRootCommand - حرفياً ============
+    private String executeRootCommand(String command) {
+        StringBuilder output = new StringBuilder();
         Process p = null;
         DataOutputStream os = null;
         BufferedReader br = null;
@@ -31,11 +30,11 @@ public class Scanner {
             p = Runtime.getRuntime().exec("su");
             os = new DataOutputStream(p.getOutputStream());
             br = new BufferedReader(new InputStreamReader(p.getInputStream()));
-            os.writeBytes(cmd + "\nexit\n");
+            os.writeBytes(command + "\nexit\n");
             os.flush();
             String line;
             while ((line = br.readLine()) != null) {
-                out.append(line).append("\n");
+                output.append(line).append("\n");
             }
             p.waitFor();
         } catch (Exception e) {
@@ -44,107 +43,81 @@ public class Scanner {
             try { if (os != null) os.close(); } catch (Exception ignored) {}
             try { if (br != null) br.close(); } catch (Exception ignored) {}
         }
-        return out.toString().trim();
+        return output.toString().trim();
     }
 
-    public String pullGaid() {
+    // ============ KunTools extractPayloadSync - حرفياً ============
+    // يفحص تطبيق واحد ويحدد نوع المنصة والمعرف
+    public String extractPayloadSync(String pkg) {
+        String command =
+            "pkg=\"" + pkg + "\"; " +
+            "prefs=\"/data/data/$pkg/shared_prefs\"; " +
+            "af_xml=\"$prefs/appsflyer-data.xml\"; " +
+            "singular_xml=\"$prefs/pref-singular-id.xml\"; " +
+            "adjust_xml=\"$prefs/adjust_preferences.xml\"; " +
+            "if test -f \"$af_xml\"; then " +
+            "  id=$(sed -n \"s/.*name=\\\"AF_INSTALLATION\\\">\\([^<]*\\).*/\\1/p\" \"$af_xml\" | head -n 1); " +
+            "  echo \"AF|$id\"; " +
+            "elif test -f \"$singular_xml\"; then " +
+            "  id=$(sed -n \"s/.*name=\\\"singular-id\\\">\\([^<]*\\).*/\\1/p\" \"$singular_xml\" | head -n 1); " +
+            "  echo \"SG|$id\"; " +
+            "elif test -f \"$adjust_xml\"; then " +
+            "  echo \"AD|-\"; " +
+            "else " +
+            "  echo \"NO|-\"; " +
+            "fi";
+
+        return executeRootCommand(command);
+    }
+
+    // ============ GAID ============
+    public String getGaid() {
         if (cachedGaid != null) return cachedGaid;
 
-        String[] candidates = {
-            "/data/data/com.google.android.gms/shared_prefs/adid_settings.xml",
-            "/data/user/0/com.google.android.gms/shared_prefs/adid_settings.xml"
-        };
+        String result = executeRootCommand(
+            "cat /data/data/com.google.android.gms/shared_prefs/adid_settings.xml 2>/dev/null"
+        );
 
-        for (String path : candidates) {
-            String raw = sh("cat \"" + path + "\" 2>/dev/null");
-            if (raw.isEmpty()) continue;
-            String found = matchUuid(raw);
-            if (found != null) {
-                cachedGaid = found;
-                return found;
+        try {
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile(
+                "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+            ).matcher(result);
+            if (m.find()) {
+                cachedGaid = m.group();
+                return cachedGaid;
             }
-        }
-
-        String sec = sh("settings get secure advertising_id 2>/dev/null");
-        if (sec != null && !sec.isEmpty() && !sec.equals("null")) {
-            cachedGaid = sec.trim();
-            return cachedGaid;
-        }
+        } catch (Exception ignored) {}
 
         cachedGaid = "Not Found";
         return cachedGaid;
     }
 
-    // ============ DEEP SCAN ALL APPS (ONE ROOT CALL) ============
-    public void deepScanAll(List<AppData> apps) {
-        pullGaid();
+    // ============ DEEP SCAN ONE APP (ON CLICK) ============
+    public void deepScan(AppData app) {
+        String result = extractPayloadSync(app.packageName);
 
-        StringBuilder script = new StringBuilder();
-        for (AppData a : apps) {
-            String pkg = a.packageName;
-            script.append("P=\"/data/data/").append(pkg).append("/shared_prefs\"; ");
-            script.append("A=\"/data/user/0/").append(pkg).append("/shared_prefs\"; ");
-            script.append("[ -d \"$P\" ] || P=\"$A\"; ");
-            script.append("AF=\"$P/appsflyer-data.xml\"; ");
-            script.append("SG=\"$P/pref-singular-id.xml\"; ");
-            script.append("AJ=\"$P/adjust_preferences.xml\"; ");
-            script.append("if [ -f \"$AF\" ]; then ");
-            script.append("V=$(sed -n 's/.*name=\"AF_INSTALLATION\">\\([^<]*\\).*/\\1/p' \"$AF\" | head -n1); ");
-            script.append("echo \"JT|").append(pkg).append("|AF|$V\"; ");
-            script.append("elif [ -f \"$SG\" ]; then ");
-            script.append("V=$(sed -n 's/.*name=\"singular-id\">\\([^<]*\\).*/\\1/p' \"$SG\" | head -n1); ");
-            script.append("echo \"JT|").append(pkg).append("|SG|$V\"; ");
-            script.append("elif [ -f \"$AJ\" ]; then ");
-            script.append("echo \"JT|").append(pkg).append("|AD|-\"; ");
-            script.append("else ");
-            script.append("echo \"JT|").append(pkg).append("|NO|-\"; ");
-            script.append("fi; ");
-        }
+        app.gaid = getGaid();
 
-        String out = sh(script.toString());
-        Map<String, String[]> results = new HashMap<>();
-
-        for (String line : out.split("\n")) {
-            if (!line.startsWith("JT|")) continue;
-            String[] parts = line.split("\\|");
-            if (parts.length < 4) continue;
-            results.put(parts[1], new String[]{parts[2], parts[3]});
-        }
-
-        for (AppData a : apps) {
-            String[] r = results.get(a.packageName);
-            a.gaid = cachedGaid;
-            if (r == null) {
-                a.tracker = "None";
-                a.trackerColor = 0xFF9E9E9E;
-            } else if ("AF".equals(r[0])) {
-                a.tracker = "AppsFlyer";
-                a.trackerColor = 0xFFFF9800;
-                a.afId = r[1].isEmpty() ? "-" : r[1];
-            } else if ("SG".equals(r[0])) {
-                a.tracker = "Singular";
-                a.trackerColor = 0xFF00E5FF;
-                a.singularId = r[1].isEmpty() ? "-" : r[1];
-            } else if ("AD".equals(r[0])) {
-                a.tracker = "Adjust";
-                a.trackerColor = 0xFF00E676;
-            } else {
-                a.tracker = "None";
-                a.trackerColor = 0xFF9E9E9E;
-            }
+        if (result.startsWith("AF|")) {
+            app.tracker = "AppsFlyer";
+            app.trackerColor = 0xFFFF9800;
+            app.afId = result.substring(3).trim();
+            if (app.afId.isEmpty()) app.afId = "-";
+        } else if (result.startsWith("SG|")) {
+            app.tracker = "Singular";
+            app.trackerColor = 0xFF00E5FF;
+            app.singularId = result.substring(3).trim();
+            if (app.singularId.isEmpty()) app.singularId = "-";
+        } else if (result.startsWith("AD|")) {
+            app.tracker = "Adjust";
+            app.trackerColor = 0xFF00E676;
+        } else {
+            app.tracker = "None";
+            app.trackerColor = 0xFF9E9E9E;
         }
     }
 
-    private String matchUuid(String input) {
-        try {
-            java.util.regex.Pattern p = java.util.regex.Pattern.compile(
-                "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
-            java.util.regex.Matcher m = p.matcher(input);
-            if (m.find()) return m.group();
-        } catch (Exception ignored) {}
-        return null;
-    }
-
+    // ============ QUICK SCAN ============
     public List<AppData> scan() {
         List<AppData> list = new ArrayList<>();
         PackageManager pm = ctx.getPackageManager();
