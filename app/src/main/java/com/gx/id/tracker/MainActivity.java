@@ -6,9 +6,9 @@ import android.os.Handler;
 import android.os.Looper;
 import android.text.Editable;
 import android.text.TextWatcher;
-import android.view.View;
 import android.widget.EditText;
 import android.widget.TextView;
+import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -48,25 +48,9 @@ public class MainActivity extends AppCompatActivity {
 
         scanner = new Scanner(this);
 
-        adapter = new AppAdapter(app -> {
-            ProgressDialog pd = new ProgressDialog(MainActivity.this);
-            pd.setMessage("Reading " + app.name + " ...");
-            pd.setCancelable(false);
-            pd.show();
-
-            new Thread(() -> {
-                scanner.deepScan(app);
-                new Handler(Looper.getMainLooper()).post(() -> {
-                    pd.dismiss();
-                    refreshCounts();
-                    adapter.notifyDataSetChanged();
-                    IdDialog.show(MainActivity.this, app);
-                });
-            }).start();
-        });
+        adapter = new AppAdapter(app -> IdDialog.show(MainActivity.this, app));
         recyclerApps.setAdapter(adapter);
 
-        // Search
         etSearch.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int st, int c, int a) {}
             @Override public void onTextChanged(CharSequence s, int st, int b, int c) {
@@ -76,13 +60,12 @@ public class MainActivity extends AppCompatActivity {
             @Override public void afterTextChanged(Editable s) {}
         });
 
-        // Filters
         btnFilterAll.setOnClickListener(v -> setFilter("ALL"));
         btnFilterAf.setOnClickListener(v -> setFilter("AppsFlyer"));
         btnFilterSin.setOnClickListener(v -> setFilter("Singular"));
         btnFilterAdj.setOnClickListener(v -> setFilter("Adjust"));
 
-        loadApps();
+        loadAppsAndScanAll();
     }
 
     private void setFilter(String f) {
@@ -114,14 +97,20 @@ public class MainActivity extends AppCompatActivity {
         tvTrackersCount.setText(String.valueOf(trackersFound));
     }
 
-    private void loadApps() {
+    private void loadAppsAndScanAll() {
         ProgressDialog pd = new ProgressDialog(this);
-        pd.setMessage("Scanning tracking files...");
+        pd.setMessage("Scanning all apps...");
         pd.setCancelable(false);
         pd.show();
 
         new Thread(() -> {
+            // 1. Get list of apps
             final List<AppData> apps = scanner.scan();
+
+            // 2. Scan all apps in ONE root call (fast)
+            scanner.deepScanAll(apps);
+
+            // 3. Show results
             new Handler(Looper.getMainLooper()).post(() -> {
                 allApps.clear();
                 allApps.addAll(apps);
@@ -129,6 +118,9 @@ public class MainActivity extends AppCompatActivity {
                 applyFilters();
                 refreshCounts();
                 pd.dismiss();
+                Toast.makeText(this,
+                    "Scan complete: " + apps.size() + " apps",
+                    Toast.LENGTH_SHORT).show();
             });
         }).start();
     }
