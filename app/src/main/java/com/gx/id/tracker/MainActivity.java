@@ -104,13 +104,9 @@ public class MainActivity extends AppCompatActivity {
         pd.show();
 
         new Thread(() -> {
-            // 1. Get list of apps
             final List<AppData> apps = scanner.scan();
-
-            // 2. Scan all apps in ONE root call (fast)
             scanner.deepScanAll(apps);
 
-            // 3. Show results
             new Handler(Looper.getMainLooper()).post(() -> {
                 allApps.clear();
                 allApps.addAll(apps);
